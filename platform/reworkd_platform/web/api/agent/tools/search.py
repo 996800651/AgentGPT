@@ -27,11 +27,10 @@ async def _google_serper_search_results(
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            f"https://google.serper.dev/{search_type}", headers=headers, params=params
-        ) as response:
+                    f"https://google.serper.dev/{search_type}", headers=headers, params=params
+                ) as response:
             response.raise_for_status()
-            search_results = await response.json()
-            return search_results
+            return await response.json()
 
 
 class Search(Tool):
@@ -71,30 +70,30 @@ class Search(Tool):
             elif answer_box.get("snippetHighlighted"):
                 answer_values.append(", ".join(answer_box.get("snippetHighlighted")))
 
-            if len(answer_values) > 0:
+            if answer_values:
                 return stream_string("\n".join(answer_values), True)
 
         if results.get("knowledgeGraph"):
             kg = results.get("knowledgeGraph", {})
             title = kg.get("title")
-            entity_type = kg.get("type")
-            if entity_type:
+            if entity_type := kg.get("type"):
                 snippets.append(f"{title}: {entity_type}.")
-            description = kg.get("description")
-            if description:
+            if description := kg.get("description"):
                 snippets.append(description)
-            for attribute, value in kg.get("attributes", {}).items():
-                snippets.append(f"{title} {attribute}: {value}.")
-
+            snippets.extend(
+                f"{title} {attribute}: {value}."
+                for attribute, value in kg.get("attributes", {}).items()
+            )
         for result in results["organic"][:k]:
             if "snippet" in result:
                 snippets.append(result["snippet"])
             if "link" in result and len(links) < max_links:
                 links.append(result["link"])
-            for attribute, value in result.get("attributes", {}).items():
-                snippets.append(f"{attribute}: {value}.")
-
-        if len(snippets) == 0:
+            snippets.extend(
+                f"{attribute}: {value}."
+                for attribute, value in result.get("attributes", {}).items()
+            )
+        if not snippets:
             return stream_string("No good Google Search Result was found", True)
 
         return summarize(self.model_settings, goal, task, snippets)
